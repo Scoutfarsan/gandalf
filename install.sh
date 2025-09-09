@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Ladda env tidigt (från /boot vid första boot)
-[ -f /boot/.env ] && { set -a; . /boot/.env; set +a; }
+[ -f /boot/firmware/.env ] && { set -a; . /boot/firmware/.env; set +a; }
 
 # Defaults
 REPO_OWNER="${REPO_OWNER:-ditt_githubkonto}"
