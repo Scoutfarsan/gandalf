@@ -3,11 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT_DIR/.env"
-LOG_DIR="/var/log/${REPO_NAME:-pihole}"
+LOG_DIR="/var/log/${REPO_NAME:-gandalf}"
 mkdir -p "$LOG_DIR"
 [ -f "$ENV_FILE" ] && { set -a; . "$ENV_FILE"; set +a; }
 
-log() { echo "[$(date +%F %T)] $*" | tee -a "$LOG_DIR/main.log"; }
+log() { echo "[$(date '+%F %T')]" "$@" | tee -a "$LOG_DIR/main.log"; }
 
 ntfy() {
   local title="$1"; shift; local msg="$*"
