@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-[ -f /boot/.env ] && { set -a; . /boot/.env; set +a; }
+[ -f /boot/firmware/.env ] && { set -a; . /boot/firmware/.env; set +a; }
 REPO_NAME="${REPO_NAME:-pihole}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/${REPO_NAME}}"
 ENV_FILE="$INSTALL_DIR/.env"
