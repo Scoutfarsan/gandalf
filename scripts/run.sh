@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
-source "$(dirname "$0")/common.sh"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT_DIR/scripts/lib/env.sh"
 
-START_FROM="${1:-0}"
+mkdir -p "/var/log/${REPO_NAME}"
 
-for step in "$ROOT_DIR"/scripts/steps/*_*.sh; do
-  num=$(basename "$step" | cut -d'_' -f1)
+START_FROM=0
+if [ "${1:-}" = "--from" ] && [ -n "${2:-}" ]; then START_FROM="$2"; fi
+
+for step in "$ROOT_DIR/scripts/steps/"*"_*.sh"; do
+  num="$(basename "$step" | cut -d'_' -f1)"
   if [ "$num" -lt "$START_FROM" ]; then
     log "Skippar $(basename "$step") (börjar från $START_FROM)"
     continue
   fi
-
   log "Kör $(basename "$step")"
   ntfy "setup-step" "Startar $(basename "$step")"
   bash "$step"
-  ntfy "setup-step" "Klar med $(basename "$step")"
+  ntfy "setup-step" "Klar $(basename "$step")"
 done
 
-log "Alla steg klara"; ntfy "all-done" "Orkestrering klar"
+bash "$ROOT_DIR/scripts/modules-run.sh"
