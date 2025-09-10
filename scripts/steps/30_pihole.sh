@@ -1,28 +1,60 @@
 #!/usr/bin/env bash
 set -euo pipefail
-source "$(dirname "$0")/../common.sh"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$ROOT_DIR/scripts/lib/env.sh"
 
-# Upstream-DNS för Pi-hole -> Unbound (kan styras via .env)
-UP="${PIHOLE_UPSTREAM:-127.0.0.1#5335}"
+UP="$PIHOLE_UPSTREAM"
+PASS="$(get PIHOLE_WEBPASSWORD "SäkertLösen123")"
+IFACE="$PI_IFACE"
+ADDR="${PI_IP}/24"
 
-log "Konfigurerar Pi-hole (upstream: ${UP})"
-
-# Se till att katalogen finns (Pi-hole förväntar sig denna)
+log "[30] Pi-hole install/konf"
 sudo mkdir -p /etc/pihole
 
-# Om du har en template i repo, lägg in den första gången
-if [ ! -f "/etc/pihole/setupVars.conf" ] && [ -f "$ROOT_DIR/pihole/setupVars.conf.template" ]; then
-  sudo install -m 0644 -o root -g root "$ROOT_DIR/pihole/setupVars.conf.template" /etc/pihole/setupVars.conf
+# seed setupVars (unattended)
+if [ ! -f /etc/pihole/setupVars.conf ]; then
+  sudo tee /etc/pihole/setupVars.conf >/dev/null <<EOF
+PIHOLE_INTERFACE=${IFACE}
+IPV4_ADDRESS=${ADDR}
+IPV6_ADDRESS=
+PIHOLE_DNS_1=${UP}
+DNSMASQ_LISTENING=all
+QUERY_LOGGING=true
+INSTALL_WEB_SERVER=true
+INSTALL_WEB_INTERFACE=true
+WEBPASSWORD=${PASS}
+DHCP_ACTIVE=false
+EOF
 fi
 
-# Sätt admin-lösenord om det finns i .env (utan interaktiv prompt)
-if [ -n "${PIHOLE_WEBPASSWORD:-}" ]; then
-  sudo pihole -a -p "${PIHOLE_WEBPASSWORD}" || true
+if ! command -v pihole >/dev/null 2>&1; then
+  sudo -E bash -lc 'export TERM=xterm DEBIAN_FRONTEND=noninteractive; curl -fsSL https://install.pi-hole.net | bash /dev/stdin --unattended'
 fi
 
-# Sätt upstream-DNS och starta om FTL
-sudo pihole -a setdns "${UP}" --quiet || true
+sudo pihole -a -p "$PASS" || true
+sudo pihole -a setdns "$UP" --quiet || true
+
+# Adlists styrs via variabel ADLISTS (komma-sep) om du vill override:a
+_ADLISTS="$(get ADLISTS "")"
+if [ -z "$_ADLISTS" ]; then
+  _ADLISTS="https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts,\
+https://blocklistproject.github.io/Lists/ads.txt,\
+https://blocklistproject.github.io/Lists/malware.txt,\
+https://blocklistproject.github.io/Lists/phishing.txt,\
+https://blocklistproject.github.io/Lists/abuse.txt,\
+https://blocklistproject.github.io/Lists/porn.txt"
+fi
+IFS=',' read -r -a AL <<< "$_ADLISTS"
+for url in "${AL[@]}"; do sudo pihole -g --addurl "$(echo "$url" | xargs)" || true; done
+sudo pihole -g || true
+
+# Regexlista kan override: REGEX_LIST (komma-sep)
+_REGEX="$(get REGEX_LIST "")"
+if [ -z "$_REGEX" ]; then
+  _REGEX="([a-z0-9-]+\\.)*adult$,([a-z0-9-]+\\.)*porn$,([a-z0-9-]+\\.)*sex$"
+fi
+IFS=',' read -r -a RX <<< "$_REGEX"
+for r in "${RX[@]}"; do sudo pihole --regex "$(echo "$r" | xargs)" || true; done
+
 sudo systemctl restart pihole-FTL || true
-
-log "Pi-hole konfigurerad med upstream ${UP}"
-ntfy "pihole-config" "Pi-hole klar med upstream ${UP}"
+log "[30] klar (upstream: $UP). DHCP förberett men INTE aktivt."
