@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
-source "$(dirname "$0")/../common.sh"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$ROOT_DIR/scripts/lib/env.sh"
 
-sudo timedatectl set-timezone "${TZ:-Europe/Stockholm}" || true
-sudo hostnamectl set-hostname "${HOSTNAME:-pihole}" || true
-req curl; req jq; req ufw; req ca-certificates
+log "[10] OS-prep"
+sudo apt-get update -y
+sudo apt-get install -y ca-certificates curl git ufw
+
+# TZ/locale
+echo "$TZ" | sudo tee /etc/timezone >/dev/null
+sudo ln -sf "/usr/share/zoneinfo/$TZ" /etc/localtime || true
+sudo sed -i "s/^# *${LOCALE}/${LOCALE}/" /etc/locale.gen || true
+sudo locale-gen || true
+
+# Hostname
+echo "$PI_HOSTNAME" | sudo tee /etc/hostname >/dev/null
+sudo hostnamectl set-hostname "$PI_HOSTNAME" || true
+
+# UFW baseline
+sudo ufw --force enable || true
 sudo ufw allow 22/tcp || true
-sudo ufw allow 53/tcp || true
-sudo ufw allow 53/udp || true
-sudo ufw allow 80/tcp || true
-sudo ufw allow 51820/udp || true
-echo "y" | sudo ufw enable || true
-log "OS prep klar"
-
+log "[10] klar"
