@@ -1,7 +1,0 @@
-[Interface]
-Address = __ADDRESS__
-ListenPort = __PORT__
-PrivateKey = __PRIVATE_KEY__
-
-PostUp = iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE; iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT
-PostDown = iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE; iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT
