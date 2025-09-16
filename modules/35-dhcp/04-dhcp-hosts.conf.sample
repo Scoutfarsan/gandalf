@@ -1,0 +1,33 @@
+# Format: dhcp-host=<MAC>,<IP>,<hostname>,<lease>
+# Pi
+dhcp-host=B8:27:EB:EF:C8:BC,10.20.30.2,pihole,24h
+
+# Verisure (Larm)
+dhcp-host=00:23:C1:3D:17:1F,10.20.30.31,verisure-kabel,24h
+
+# Gemensamt
+dhcp-host=AC:67:84:A8:70:88,10.20.30.41,chromecast,24h
+dhcp-host=2C:9E:00:0D:F5:24,10.20.30.42,ps5,24h
+dhcp-host=D0:BF:9C:DF:FE:4E,10.20.30.43,hp65g01-w11-2,24h
+dhcp-host=F4:81:39:14:B8:0D,10.20.30.44,skrivare-mg5450s,24h
+
+# Alexander
+dhcp-host=A2:77:E0:7E:1E:AB,10.20.30.51,alexander-s20-fe,24h
+dhcp-host=30:9C:23:1D:45:05,10.20.30.52,desktop-aceasar,24h
+
+# Jonathan
+dhcp-host=98:EE:CC:6C:4E:60,10.20.30.71,jcaesar-desktop,24h
+
+# Mathilda
+dhcp-host=E2:07:9A:AB:97:73,10.20.30.81,mcaesars9,24h
+
+# Pär
+dhcp-host=60:3A:AF:8D:3D:8A,10.20.30.91,pcaesar-s20,24h
+dhcp-host=C2:46:03:89:53:CD,10.20.30.92,parca1-s24,24h
+
+# Övriga (inledningsvis i gästpoolen)
+dhcp-host=EC:0B:AE:6B:0F:AF,10.20.30.151,bl-6b-0f-af,12h
+dhcp-host=00:B5:D0:05:A1:D7,10.20.30.152,j-watch,12h
+dhcp-host=E6:B1:8C:2F:EF:FC,10.20.30.153,antonini,12h
+dhcp-host=3E:B0:4A:1F:6B:81,10.20.30.154,unknown-3eb0,12h
+dhcp-host=E8:A0:CD:3C:46:14,10.20.30.155,unknown-e8a0,12h

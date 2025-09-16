@@ -1,0 +1,12 @@
+[Unit]
+Description=${REPO_NAME} Auto-Heal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/${REPO_NAME}/.env
+EnvironmentFile=/etc/${REPO_NAME}/secrets.env
+ExecStart=/usr/local/sbin/autoheal.sh
+User=root
+Group=root

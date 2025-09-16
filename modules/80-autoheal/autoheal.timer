@@ -1,0 +1,8 @@
+[Unit]
+Description=Run Auto-Heal periodically
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=10m
+Unit=autoheal.service
+[Install]
+WantedBy=timers.target
