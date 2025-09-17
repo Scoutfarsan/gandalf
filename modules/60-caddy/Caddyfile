@@ -1,6 +1,0 @@
-vpn.pcaesar.se {
-    encode zstd gzip
-    tls you@pcaesar.se
-    @wg path /wg* /portal* /admin*
-    reverse_proxy @wg 127.0.0.1:8088
-}
