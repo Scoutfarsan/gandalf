@@ -1,0 +1,10 @@
+# .sops.yaml — v6.43
+creation_rules:
+  - path_regex: secrets/.*\.env\.enc$
+    encrypted_regex: '^(.*)$'
+    age:
+      - AGE_RECIPIENT_1_HERE
+  - path_regex: env/.*\.env\.enc$
+    encrypted_regex: '^(.*)$'
+    age:
+      - AGE_RECIPIENT_1_HERE
