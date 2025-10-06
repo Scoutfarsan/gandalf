@@ -1,4 +1,4 @@
-# tools/windows/prepare-gandalf-boot.ps1 — v6.43 (no-age-on-win)
+# tools/windows/prepare-gandalf-boot.ps1 — v6.43 (no-age-on-win, robust ssh-keygen)
 [CmdletBinding()]
 param(
   [string]$KeyPath = "$env:USERPROFILE\.ssh\id_ed25519",
@@ -11,34 +11,54 @@ $ErrorActionPreference = 'Stop'
 
 function New-IfMissing {
   param([string]$Path,[string]$Content,[switch]$Secret,[switch]$Overwrite)
-  if ($Overwrite -and (Test-Path $Path)) { Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue }
+  if ($Overwrite -and (Test-Path $Path)) {
+    Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+  }
   if (-not (Test-Path $Path)) {
     $Content | Out-File -FilePath $Path -Encoding utf8 -Force
-    if ($Secret) { try { Set-ItemProperty -Path $Path -Name Attributes -Value ([IO.FileAttributes]::Hidden) } catch {} }
+    if ($Secret) {
+      try { Set-ItemProperty -Path $Path -Name Attributes -Value ([IO.FileAttributes]::Hidden) } catch {}
+    }
   }
 }
 
 function Ensure-Ed25519Key {
+  <#
+    Robust nyckelgenerering via array-splatting (variant B).
+    Undviker PowerShells argument-quirks (t.ex. -N "") och funkar i PS 5/7.
+  #>
   param([string]$KeyPath,[string]$KeyComment)
   $ssh = Get-Command ssh-keygen -ErrorAction SilentlyContinue
-  if (-not $ssh) { throw "ssh-keygen saknas. Aktivera 'OpenSSH Client' i Windows (Optional Features)." }
+  if (-not $ssh) { throw "ssh-keygen saknas. Aktivera 'OpenSSH Client' i Windows (Inställningar → Valfria funktioner)." }
+
   $sshDir  = Split-Path -Parent $KeyPath
   $pubPath = "$KeyPath.pub"
+  if (-not (Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir -Force | Out-Null }
+
   if (-not (Test-Path $pubPath)) {
-    if (-not (Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir -Force | Out-Null }
-    ssh-keygen -t ed25519 -a 100 -f $KeyPath -N "" -C $KeyComment | Out-Null
+    $args = @(
+      '-t','ed25519',
+      '-a','100',
+      '-f', $KeyPath,
+      '-N','',            # tom passphrase
+      '-C', $KeyComment
+    )
+    & $ssh.Source @args | Out-Null
   }
+
   if (-not (Test-Path $pubPath)) { throw "Misslyckades skapa $pubPath" }
   return $pubPath
 }
 
-$bootDrive = Get-Volume | Where-Object { $_.FileSystem -eq 'FAT32' -and $_.DriveLetter } | Sort-Object DriveLetter | Select-Object -First 1
-if (-not $bootDrive) { throw "Ingen FAT32 BOOT-partition hittades." }
-$BOOT = ($bootDrive.DriveLetter + ":\")
+# --- Hitta BOOT-partitionen (FAT32) ---
+$bootVolume = Get-Volume | Where-Object { $_.FileSystem -eq 'FAT32' -and $_.DriveLetter } | Sort-Object DriveLetter | Select-Object -First 1
+if (-not $bootVolume) { throw "Ingen FAT32 BOOT-partition hittades. Sätt i SD-kortets BOOT." }
+$BOOT = ($bootVolume.DriveLetter + ":\")
 $envPath     = Join-Path $BOOT "boot-env"
 $secretsPath = Join-Path $BOOT "boot-secrets"
 New-Item -ItemType Directory -Force -Path $envPath,$secretsPath | Out-Null
 
+# --- Default-innehåll (du kan justera i efterhand) ---
 $baseEnv = @'
 # base.env — v6.43
 PI_HOSTNAME="gandalf"
@@ -146,20 +166,41 @@ $files = @{
   (Join-Path $secretsPath "ntfy.env")= $ntfySec
   (Join-Path $secretsPath "wifi.env")= $wifiSec
 }
-foreach($k in $files.Keys){ New-IfMissing $k $files[$k] -Secret:($k -like "*boot-secrets*") -Overwrite:$ow }
-
-# SSH authorized_keys
-$pubPath = Ensure-Ed25519Key -KeyPath $KeyPath -KeyComment $KeyComment
-$pubKey  = Get-Content $pubPath -Raw
-$authKeys = Join-Path $envPath "ssh_authorized_keys"
-if (-not (Test-Path $authKeys)) { "" | Out-File -FilePath $authKeys -Encoding utf8 -Force }
-if (-not (Select-String -Path $authKeys -Pattern ([regex]::Escape($pubKey.Trim())) -Quiet)) {
-  Add-Content -Path $authKeys -Value $pubKey
+foreach($k in $files.Keys){
+  New-IfMissing $k $files[$k] -Secret:($k -like "*boot-secrets*") -Overwrite:$ow
 }
 
-# (Valfritt) Kopiera age.key om den råkar finnas — annars sköter Pi:n allt
+# --- SSH authorized_keys: säkerställ nyckel och lägg in på BOOT ---
+try {
+  $pubPath = "$KeyPath.pub"
+  if (-not (Test-Path $pubPath)) {
+    $pubPath = Ensure-Ed25519Key -KeyPath $KeyPath -KeyComment $KeyComment
+  }
+  $pubKey  = Get-Content $pubPath -Raw
+  $authKeys = Join-Path $envPath "ssh_authorized_keys"
+  if (-not (Test-Path $authKeys)) { "" | Out-File -FilePath $authKeys -Encoding utf8 -Force }
+  if (-not (Select-String -Path $authKeys -Pattern ([regex]::Escape($pubKey.Trim())) -Quiet)) {
+    Add-Content -Path $authKeys -Value $pubKey
+  }
+} catch {
+  Write-Warning "Kunde inte säkerställa SSH-nyckel: $($_.Exception.Message)"
+  Write-Warning "Fortsätter ändå – du kan lägga in authorized_keys manuellt i $authKeys"
+}
+
+# --- (Valfritt) Kopiera age.key om den råkar finnas — annars sköter Pi:n allt ---
 if (Test-Path $AgeKeyPath) {
-  Copy-Item -LiteralPath $AgeKeyPath -Destination (Join-Path $secretsPath "age.key") -Force
+  try {
+    Copy-Item -LiteralPath $AgeKeyPath -Destination (Join-Path $secretsPath "age.key") -Force
+  } catch {
+    Write-Warning "Kunde inte kopiera age.key: $($_.Exception.Message)"
+  }
 }
 
-Write-Host "✅ BOOT prepp klar."
+Write-Host "✅ BOOT prepp klar. Mappar:"
+Write-Host " - $envPath"
+Write-Host " - $secretsPath"
+Write-Host ""
+Write-Host "Nästa steg:"
+Write-Host "1) Kopiera hela 'boot-kit' till $($BOOT)boot-kit"
+Write-Host "2) Sätt i SD-kortet i Pi och boota"
+Write-Host "3) Följ:  journalctl -u firstrun -f"
