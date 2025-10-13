@@ -1,0 +1,17 @@
+# MAC,IP,HOST,COMMENT
+a0:21:b7:c1:f5:94,10.20.30.11,nas,Infra
+f4:81:39:1a:db:8c,10.20.30.12,skrivare-mg5450s,Infra
+a4:2b:b0:ff:f0:c5,10.20.30.13,re200,Infra
+b8:27:eb:ef:c8:bc,10.20.30.2,pihole,Infra
+00:23:c1:3d:17:1f,10.20.30.31,verisure-kabel,Larm
+d0:4e:50:48:aa:f4,10.20.30.32,verisure-wifi,Larm
+ac:67:84:a8:70:88,10.20.30.41,chromecast,Gemensamt
+2c:9e:00:0d:f5:24,10.20.30.42,ps5,Gemensamt
+a2:77:e0:7e:1e:ab,10.20.30.51,alexander-s20fe2,Alexander
+e6:b1:8c:2f:ef:fc,10.20.30.61,elin-phone,Elin
+98:ec:bc:6c:4e:60,10.20.30.71,jcaesar-desktop,Jonathan
+00:b5:d0:05:a1:d7,10.20.30.72,j-watch,Jonathan
+e2:07:9a:ab:97:73,10.20.30.81,mcaesars9-2,Mathilda
+60:3a:af:8d:3d:8a,10.20.30.91,pcaesar-s20,Par
+30:9c:23:1d:45:05,10.20.30.92,desktop-acaesar,Par
+ec:0b:ae:6b:0f:af,10.20.30.93,bl-6b-0f-af,Par

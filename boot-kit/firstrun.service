@@ -4,11 +4,11 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=oneshot
-ExecStart=/boot/firmware/boot-kit/firstrun.sh
-RemainAfterExit=no
-StandardOutput=journal
-StandardError=journal
+Type=simple
+ExecStart=/bin/bash /boot/firmware/boot-kit/firstrun.sh
+StandardOutput=append:/var/log/gandalf-firstrun.log
+StandardError=append:/var/log/gandalf-firstrun.log
+Restart=no
 
 [Install]
 WantedBy=multi-user.target
