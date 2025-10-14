@@ -7,7 +7,8 @@ exec > >(tee -a "") 2>&1
 log "[install] start; LAN= PI="
 
 SEG_ROOT="/opt/gandalf/segments"
-ORDER=(10-core 20-security 30-dns 40-vpn 50-tools 60-tls 80-ops 90-infra)
+ORDER=(10-core 30-dns 40-vpn 50-tools 60-tls 80-ops 90-infra)
+  # 20-security temporärt inaktiverat
 for seg in ""; do
   [ -d "/" ] || continue
   if [ -f "//.order" ]; then
