@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+REPO="${REPO:-/opt/gandalf}"
+ORDER_FILE="${1:-$REPO/segments/30-dns/.order}"
+[ -r "$ORDER_FILE" ] || { echo "Hittar inte .order: $ORDER_FILE"; exit 2; }
+. /opt/gandalf/lib/notify.sh
+PI_DETECTED_IP="$(hostname -I | awk '{print $1}')"
+export PI_IP="${PI_IP:-${PI_DETECTED_IP}}"; export LAN_BASE="${LAN_BASE:-${PI_IP%.*}}"
+TOTAL=0; OKS=0; FAILS=0; FAILED_LIST=""; START_ALL="$(date +%s)"
+while IFS= read -r line; do
+  MOD="$(printf "%s" "$line" | sed "s/#.*$//" | xargs)"; [ -z "$MOD" ] && continue
+  INST="$REPO/segments/30-dns/$MOD/install.sh"; TOTAL=$((TOTAL+1)); echo "[run-ordered] Kör: $MOD"
+  if [ -x "$INST" ]; then
+    if /opt/gandalf/bin/run-segment "$INST"; then OKS=$((OKS+1))
+    else FAILS=$((FAILS+1)); FAILED_LIST="${FAILED_LIST}${MOD}\n"; fi
+  else
+    gandalf_ntfy "Hoppar över: $MOD" "Saknar $INST" 3 "warning"; echo "[run-ordered] Hoppar över (saknas): $MOD"
+  fi
+done < "$ORDER_FILE"
+DUR_ALL="$(( $(date +%s) - START_ALL ))s"
+TITLE="Klar: run-ordered ($OKS/$TOTAL OK)"; [ $FAILS -gt 0 ] && TITLE="FEL i run-ordered ($OKS/$TOTAL OK, $FAILS fail)"
+BODY="$(printf 'Körtid: %s\nOK: %s  |  FAIL: %s\n' "$DUR_ALL" "$OKS" "$FAILS")"
+[ $FAILS -gt 0 ] && BODY="${BODY}\nFelmoduler:\n$(printf "%b" "$FAILED_LIST")"
+gandalf_ntfy "$TITLE" "$BODY" "$([ $FAILS -gt 0 ] && echo 5 || echo 3)" "$([ $FAILS -gt 0 ] && echo rotating_light || echo white_check_mark)"
+echo -e "\n========================================\n run-ordered KLAR  Tid: $DUR_ALL\n  OK: $OKS / $TOTAL    FAIL: $FAILS"
+[ $FAILS -gt 0 ] && printf "  Felmoduler:\n%b" "$FAILED_LIST"; echo -e "========================================\n"

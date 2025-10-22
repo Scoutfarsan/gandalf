@@ -1,3 +1,4 @@
-m803-loki-server
-m802-promtail
 m801-autoheal
+m802-promtail
+m803-loki
+m803-loki-server

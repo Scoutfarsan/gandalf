@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SEG_PATH="${1:-}"; shift || true
+[ -n "$SEG_PATH" ] || { echo "usage: run-segment /path/to/install.sh"; exit 2; }
+[ -x "$SEG_PATH" ] || { echo "saknar körbar fil: $SEG_PATH"; exit 2; }
+. /opt/gandalf/lib/notify.sh
+PI_DETECTED_IP="$(hostname -I | awk '{print $1}')"
+export PI_IP="${PI_IP:-${PI_DETECTED_IP}}"; export LAN_BASE="${LAN_BASE:-${PI_IP%.*}}"
+NAME="$(basename "$(dirname "$SEG_PATH")")/$(basename "$SEG_PATH")"
+START_SEC="$(date +%s)"; START_TS="$(date +%F' '%T)"
+gandalf_ntfy "Startar: $NAME" "Start: $START_TS" 3 "hammer_and_wrench"
+set +e; OUTPUT="$("$SEG_PATH" "$@" 2>&1)"; RC=$?; set -e
+DUR="$(( $(date +%s) - START_SEC ))s"
+# URL-map per modul (lätt att utöka):
+CLICK=""
+case "$NAME" in
+  m301-pihole/install.sh) CLICK="http://$PI_IP/admin/";;
+  m305-admin/install.sh)  CLICK="http://$PI_IP/admin/";;
+esac
+if [ $RC -eq 0 ]; then
+  MSG=$(
+    printf "\n"; printf "────────────────────────────────────────\n"
+    printf " [KLAR] %s\n" "$NAME"; [ -n "$CLICK" ] && printf "  URL:   %s\n" "$CLICK"
+    printf "  Tid:   %s\n" "$DUR"; printf "────────────────────────────────────────\n"
+  )
+  echo "$MSG"; echo "$OUTPUT" | tail -n 10 | sed 's/^/  /'
+  SHORT="$(printf '%s\n\n%s\n' "$MSG" "$(printf "%s\n" "$OUTPUT" | tail -n 60)")"
+  [ "${NTFY_NOTIFY_ON_OK:-1}" = "1" ] && gandalf_ntfy "Klar: $NAME" "$SHORT" 3 "white_check_mark" "$CLICK"
+  LOGFILE="$(mktemp)"; trap 'rm -f "$LOGFILE"' EXIT
+  printf "%s\n" "$OUTPUT" >"$LOGFILE"
+  TS="$(date +%Y-%m-%d_%H%M%S)"; LOGNAME="$(echo "$NAME" | tr / _)_${TS}.log"
+  curl -fsS -X POST "${NTFY_URL%/}/$NTFY_TOPIC" -H "Title: [$(hostname)] Logg: $NAME" \
+       -H "Filename: ${LOGNAME}" --data-binary @"$LOGFILE" >/dev/null || true
+  exit 0
+else
+  MSG=$(
+    printf "\n"; printf "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n"
+    printf " [FEL] %s  (rc=%s)\n" "$NAME" "$RC"; printf "  Tid: %s\n" "$DUR"
+    printf "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n"
+  )
+  echo "$MSG"; printf "%s\n" "$OUTPUT" | tail -n 20 | sed 's/^/  /'
+  SHORT="$(printf '%s\n\n%s\n' "$MSG" "$(printf "%s\n" "$OUTPUT" | tail -n 60)")"
+  gandalf_ntfy "FEL: $NAME (rc=$RC)" "$SHORT" 5 "rotating_light"
+  LOGFILE="$(mktemp)"; trap 'rm -f "$LOGFILE"' EXIT
+  printf "%s\n" "$OUTPUT" >"$LOGFILE"
+  TS="$(date +%Y-%m-%d_%H%M%S)"; LOGNAME="$(echo "$NAME" | tr / _)_${TS}.log"
+  curl -fsS -X POST "${NTFY_URL%/}/$NTFY_TOPIC" -H "Title: [$(hostname)] Logg: $NAME (FAIL rc=$RC)" \
+       -H "Filename: ${LOGNAME}" --data-binary @"$LOGFILE" >/dev/null || true
+  exit $RC
+fi

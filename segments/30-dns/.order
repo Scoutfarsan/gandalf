@@ -1,4 +1,7 @@
 m301-pihole
 m302-unbound
 m303-dnsfilters
+m303-dns-policy
 m304-dhcp
+m305-admin
+m306-dns-selftest
