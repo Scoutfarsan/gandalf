@@ -1,0 +1,8 @@
+[Unit]
+Description=Daily 09:00 merged network report
+[Timer]
+OnCalendar=09:00
+Persistent=true
+Unit=net-report-daily.service
+[Install]
+WantedBy=timers.target

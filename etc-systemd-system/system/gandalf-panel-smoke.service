@@ -1,0 +1,6 @@
+[Unit]
+Description=Gandalf Panel smoke test (status+auth+ddns)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/gandalf-panel-smoke

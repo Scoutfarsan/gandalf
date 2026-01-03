@@ -1,0 +1,6 @@
+[Unit]
+Description=Healthcheck Gandalf Panel
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'curl -fsS http://127.0.0.1:8081/api/status >/dev/null || { echo "Gandalf Panel healthcheck FAIL"; exit 1; }'

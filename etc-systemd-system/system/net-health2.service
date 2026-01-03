@@ -1,0 +1,5 @@
+[Unit]
+Description=Network health check (auto-recover if needed)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/net-report.sh --health

@@ -1,0 +1,9 @@
+[Unit]
+Description=Periodic network health via net-report.sh
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Unit=net-health2.service
+[Install]
+WantedBy=timers.target

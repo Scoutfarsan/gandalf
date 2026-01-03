@@ -1,0 +1,11 @@
+[Unit]
+Description=Recover LAN access on boot if routing/WG broke it
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'sleep 15; /usr/local/bin/net-health.sh'
+
+[Install]
+WantedBy=multi-user.target

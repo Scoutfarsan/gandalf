@@ -1,0 +1,6 @@
+[Unit]
+Description=Periodic network health check (fix via recover-net if needed)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/net-health.sh

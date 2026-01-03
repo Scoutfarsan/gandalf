@@ -1,0 +1,8 @@
+[Unit]
+Description=Monthly network summary @ 11:00 first day
+[Timer]
+OnCalendar=*-*-01 11:00
+Persistent=true
+Unit=net-monthly-report.service
+[Install]
+WantedBy=timers.target

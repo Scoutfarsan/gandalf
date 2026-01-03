@@ -1,0 +1,8 @@
+[Unit]
+Description=Välj WAN-väg (eth0 vs wlan0) och styr wlan1-AP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/net-failover.sh

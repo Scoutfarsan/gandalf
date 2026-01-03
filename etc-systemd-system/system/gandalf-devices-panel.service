@@ -1,0 +1,19 @@
+[Unit]
+Description=Gandalf Devices Panel (Flask - devices)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/gandalf-devices-panel
+ExecStart=/usr/bin/python3 /opt/gandalf-devices-panel/app.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+StandardError=journal
+EnvironmentFile=/etc/gandalf/wg-portal.env
+
+[Install]
+WantedBy=multi-user.target

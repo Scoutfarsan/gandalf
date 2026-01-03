@@ -1,0 +1,8 @@
+[Unit]
+Description=Gandalf: Sync DHCP groups to Pi-hole groups
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gandalf-sync-groups.sh

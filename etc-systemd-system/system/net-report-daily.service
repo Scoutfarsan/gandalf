@@ -1,0 +1,5 @@
+[Unit]
+Description=Send daily merged network report to ntfy
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/net-report.sh --daily

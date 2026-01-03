@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Gandalf Panel healthcheck every 5 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+Unit=gandalf-panel-health.service
+
+[Install]
+WantedBy=timers.target

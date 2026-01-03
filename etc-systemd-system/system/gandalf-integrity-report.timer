@@ -1,0 +1,8 @@
+[Unit]
+Description=Weekly integrity report (Sun 19:00)
+[Timer]
+OnCalendar=Sun 19:00
+Persistent=true
+Unit=gandalf-integrity-report.service
+[Install]
+WantedBy=timers.target

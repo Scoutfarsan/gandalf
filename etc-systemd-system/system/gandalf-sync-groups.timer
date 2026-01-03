@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Gandalf group sync (DHCP -> Pi-hole)
+
+[Timer]
+OnCalendar=*-*-* 03:10:00
+Persistent=true
+Unit=gandalf-sync-groups.service
+
+[Install]
+WantedBy=timers.target

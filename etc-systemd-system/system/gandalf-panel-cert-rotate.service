@@ -1,0 +1,5 @@
+[Unit]
+Description=Rotate Gandalf panel TLS cert and reload nginx
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gandalf-panel-cert-rotate

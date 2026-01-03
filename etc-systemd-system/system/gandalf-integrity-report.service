@@ -1,0 +1,5 @@
+[Unit]
+Description=Send weekly integrity report to ntfy
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/gandalf-integrity report

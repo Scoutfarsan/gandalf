@@ -1,0 +1,11 @@
+[Unit]
+Description=Kör net-failover var 30:e sekund
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Unit=net-failover.service
+
+[Install]
+WantedBy=timers.target

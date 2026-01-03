@@ -1,0 +1,20 @@
+[Unit]
+Description=Gandalf Devices Panel (Flask)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/gandalf-devices-panel
+ExecStart=/usr/bin/python3 /opt/gandalf-devices-panel/app.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+# (valfritt) skriv panel-logg till journal istället för fil
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

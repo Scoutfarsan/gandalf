@@ -1,0 +1,5 @@
+[Unit]
+Description=Gandalf integrity check (protected files)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/gandalf-integrity check

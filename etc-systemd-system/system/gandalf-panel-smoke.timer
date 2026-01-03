@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Gandalf Panel smoke every 30 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=30min
+Unit=gandalf-panel-smoke.service
+
+[Install]
+WantedBy=timers.target

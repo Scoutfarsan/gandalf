@@ -1,0 +1,10 @@
+[Unit]
+Description=Gandalf DHCP healthcheck (UDP/67)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/gandalf/ntfy.env
+EnvironmentFile=-/etc/gandalf/secrets.env
+ExecStart=/usr/local/bin/dhcp-health.sh
