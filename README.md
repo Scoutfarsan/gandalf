@@ -1,6 +1,6 @@
 # Gandalf (Ops Baseline)
 
-Current baseline: **v7.x**  
+Current baseline: **v7.1** (latest tag)  
 Legacy content: `/old` (archived)
 
 Quick start:
