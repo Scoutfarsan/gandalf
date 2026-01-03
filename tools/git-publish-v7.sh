@@ -4,19 +4,19 @@ set -euo pipefail
 REPO_SSH_DEFAULT="git@github.com:Scoutfarsan/gandalf.git"
 REMOTE_NAME="${REMOTE_NAME:-origin}"
 REMOTE_URL="${REMOTE_URL:-$REPO_SSH_DEFAULT}"
-TAG="${TAG:-v3.0}"
+TAG="${TAG:-v7.0}"
 
-say() { echo "[git-v3] $*"; }
+say() { echo "[git-v7] $*"; }
 
 cd "$(dirname "$0")/.."  # repo root
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  echo "[git-v3] ERROR: Kör detta inne i ett git-repo." >&2
+  echo "[git-v7] ERROR: Kör detta inne i ett git-repo." >&2
   exit 2
 fi
 
 if [[ -n "$(git status --porcelain)" ]]; then
-  echo "[git-v3] ERROR: Working tree är inte clean. Commit/stasha först." >&2
+  echo "[git-v7] ERROR: Working tree är inte clean. Commit/stasha först." >&2
   git status --porcelain
   exit 2
 fi
@@ -24,7 +24,7 @@ fi
 name="$(git config --global user.name || true)"
 mail="$(git config --global user.email || true)"
 if [[ -z "$name" || -z "$mail" ]]; then
-  echo "[git-v3] ERROR: Saknar git user.name/user.email. Sätt globalt och kör igen." >&2
+  echo "[git-v7] ERROR: Saknar git user.name/user.email. Sätt globalt och kör igen." >&2
   exit 2
 fi
 
@@ -39,7 +39,7 @@ say "Fetch $REMOTE_NAME/main"
 git fetch "$REMOTE_NAME" main --tags || git fetch "$REMOTE_NAME" --tags
 
 say "Skapar/byter till integrationsbranch från $REMOTE_NAME/main"
-git checkout -B integrate-v3 "$REMOTE_NAME/main"
+git checkout -B integrate-v7 "$REMOTE_NAME/main"
 
 say "Arkiverar remote-main innehåll till /old (om inte redan gjort)"
 if [[ -d old ]]; then

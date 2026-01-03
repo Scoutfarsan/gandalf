@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-say() { echo "[deploy-v3] $*"; }
+say() { echo "[deploy-v7] $*"; }
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 BIN_DIR="$ROOT/bin"
