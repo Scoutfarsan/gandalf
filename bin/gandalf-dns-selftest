@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LOG="${LOG:-/var/log/gandalf-dns-selftest.log}"
+mkdir -p "$(dirname "$LOG")" || true
+
+ts() { date '+%F %T'; }
+
+ok() {
+  local m="${1:-}"
+  echo "$(ts) [OK]   ${m}" | tee -a "$LOG" >/dev/null
+}
+
+ko() {
+  local m="${1:-}"
+  echo "$(ts) [FAIL] ${m}" | tee -a "$LOG" >/dev/null
+  ss -lntup | egrep ":(53|5335)\b" | tee -a "$LOG" >/dev/null || true
+
+  ip -4 a | tee -a "$LOG" >/dev/null || true
+
+  ip r | tee -a "$LOG" >/dev/null || true
+
+
+  exit 1
+}
+
+# 1) Unbound direkt
+if dig +time=2 +tries=1 @127.0.0.1 -p 5335 one.one.one.one +short | grep -Eq '^(1\.1\.1\.1|1\.0\.0\.1)$'; then
+  ok "Unbound 127.0.0.1#5335 OK"
+else
+  ko "Unbound 127.0.0.1#5335 svarar inte korrekt"
+fi
+
+# 2) Pi-hole/FTL lokalt (forward via upstreams -> Unbound)
+if dig +time=2 +tries=1 @127.0.0.1 google.com +short | grep -Eq '^[0-9]'; then
+  ok "FTL/DNS 127.0.0.1#53 OK"
+else
+  ko "FTL/DNS 127.0.0.1#53 svarar inte"
+fi
+
+exit 0
