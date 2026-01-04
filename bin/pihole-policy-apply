@@ -6,22 +6,29 @@ RULES_DIR="${RULES_DIR:-$REPO_DIR/pihole-rules}"
 DB="${DB:-/etc/pihole/gravity.db}"
 LOG="/var/log/pihole-policy-apply.log"
 
+# Default: stoppa FTL under apply för att undvika sqlite-lock
+STOP_FTL="${STOP_FTL:-1}"
+
 ts(){ date '+%F %T'; }
 say(){ echo "$(ts) [pihole-policy] $*" | tee -a "$LOG" >/dev/null; }
-
 need(){ command -v "$1" >/dev/null 2>&1 || { echo "Missing: $1" >&2; exit 2; }; }
+
 need sqlite3
 need pihole
 need awk
 need sed
 need grep
+need systemctl
 
-sql(){ sqlite3 "$DB" "$1"; }
+sql(){
+  # Busy timeout för korta locks
+  sqlite3 "$DB" "PRAGMA busy_timeout=8000; $1"
+}
 
-# Pull repo updates (best effort)
+# git pull som pi (root saknar ofta ssh-nycklar)
 if [[ -d "$REPO_DIR/.git" ]]; then
-  say "git pull (best effort)"
-  git -C "$REPO_DIR" pull --ff-only >>"$LOG" 2>&1 || true
+  say "git pull (as pi, best effort)"
+  sudo -u pi git -C "$REPO_DIR" pull --ff-only >>"$LOG" 2>&1 || true
 fi
 
 if [[ ! -f "$DB" ]]; then
@@ -29,10 +36,28 @@ if [[ ! -f "$DB" ]]; then
   exit 2
 fi
 
-# Detect client table columns (Pi-hole v6 schema differs)
+# Stoppa FTL för att släppa sqlite-lock under apply
+FTL_WAS_ACTIVE=0
+cleanup(){
+  if (( STOP_FTL == 1 )) && (( FTL_WAS_ACTIVE == 1 )); then
+    say "Starting pihole-FTL (restore)"
+    systemctl start pihole-FTL >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
+if (( STOP_FTL == 1 )); then
+  if systemctl is-active --quiet pihole-FTL 2>/dev/null; then
+    FTL_WAS_ACTIVE=1
+    say "Stopping pihole-FTL to avoid sqlite lock"
+    systemctl stop pihole-FTL >/dev/null 2>&1 || true
+  fi
+fi
+
+# Detect client table columns (Pi-hole schema varierar)
 HAS_CLIENT_NAME=0
 HAS_CLIENT_IP=0
-CLIENT_HW_COL=""  # hwaddr/mac/...
+CLIENT_HW_COL=""
 
 while IFS='|' read -r _ col _; do
   case "$col" in
@@ -56,7 +81,6 @@ ensure_group(){
 group_id(){ sql "SELECT id FROM 'group' WHERE name='$1' LIMIT 1;"; }
 
 ensure_domainlist(){
-  # type: 1 exact deny, 2 exact allow, 3 regex deny, 4 regex allow
   local type="$1" domain="$2" comment="$3"
   local id
   id="$(sql "SELECT id FROM domainlist WHERE type=$type AND domain='$domain' LIMIT 1;")"
@@ -101,44 +125,40 @@ bind_adlist_all_groups(){
 }
 
 ensure_client(){
-  # supports IP or MAC. Hostname is treated as comment only (unless name column exists)
   local client="$1" comment="$2"
   local id=""
 
-  # IP?
+  # IP
   if [[ "$client" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && (( HAS_CLIENT_IP == 1 )); then
     id="$(sql "SELECT id FROM client WHERE ip='$client' LIMIT 1;")"
     if [[ -z "$id" ]]; then
       sql "INSERT INTO client(ip,comment) VALUES('$client','$comment');"
       id="$(sql "SELECT id FROM client WHERE ip='$client' LIMIT 1;")"
     fi
-    echo "$id"
-    return 0
+    echo "$id"; return 0
   fi
 
-  # MAC?
+  # MAC
   if [[ "$client" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]] && [[ -n "${CLIENT_HW_COL:-}" ]]; then
     id="$(sql "SELECT id FROM client WHERE $CLIENT_HW_COL='$client' LIMIT 1;")"
     if [[ -z "$id" ]]; then
       sql "INSERT INTO client($CLIENT_HW_COL,comment) VALUES('$client','$comment');"
       id="$(sql "SELECT id FROM client WHERE $CLIENT_HW_COL='$client' LIMIT 1;")"
     fi
-    echo "$id"
-    return 0
+    echo "$id"; return 0
   fi
 
-  # Name column exists?
+  # NAME (om den finns)
   if (( HAS_CLIENT_NAME == 1 )); then
     id="$(sql "SELECT id FROM client WHERE name='$client' LIMIT 1;")"
     if [[ -z "$id" ]]; then
       sql "INSERT INTO client(name,comment) VALUES('$client','$comment');"
       id="$(sql "SELECT id FROM client WHERE name='$client' LIMIT 1;")"
     fi
-    echo "$id"
-    return 0
+    echo "$id"; return 0
   fi
 
-  say "WARN: client '$client' could not be stored (no suitable column). Use IP or MAC. comment='$comment'"
+  say "WARN: client '$client' could not be stored (no suitable column). Use IP or MAC."
   echo ""
 }
 
@@ -234,7 +254,14 @@ if [[ -n "${BLOCKALL_RX:-}" ]]; then
   BLOCKALL_ID="$(ensure_domainlist 3 "$BLOCKALL_RX" "blockall-scheduled")"
   mkdir -p /var/lib/gandalf
   echo "$BLOCKALL_ID" > /var/lib/gandalf/pihole_blockall_domainlist_id
-  say "Blockall rule id=$BLOCKALL_ID stored in /var/lib/gandalf/pihole_blockall_domainlist_id"
+  say "Blockall rule id=$BLOCKALL_ID stored"
+fi
+
+# Starta FTL igen innan pihole-kommandon (de förutsätter ofta att FTL kör)
+if (( STOP_FTL == 1 )) && (( FTL_WAS_ACTIVE == 1 )); then
+  say "Starting pihole-FTL before gravity/restartdns"
+  systemctl start pihole-FTL >/dev/null 2>&1 || true
+  FTL_WAS_ACTIVE=0
 fi
 
 say "Rebuild gravity..."
