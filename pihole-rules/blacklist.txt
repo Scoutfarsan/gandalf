@@ -1,0 +1,2 @@
+# En domän per rad
+# ads.example.com

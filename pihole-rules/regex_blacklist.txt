@@ -1,0 +1,2 @@
+# En regex per rad
+# (^|\.)doubleclick\.net$

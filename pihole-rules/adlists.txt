@@ -1,0 +1,3 @@
+# En URL per rad. Kommentarer med #.
+# Exempel:
+https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
