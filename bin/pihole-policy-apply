@@ -25,6 +25,15 @@ sql(){
   sqlite3 -cmd ".timeout 8000" "$DB" "$1"
 }
 
+pihole_reload_dns(){
+  # Pi-hole CLI skiljer mellan versioner: vissa har restartdns, andra har reloaddns.
+  if pihole help 2>/dev/null | grep -qE '(^|[[:space:]])restartdns([[:space:]]|$)'; then
+pihole_reload_dns >>"$LOG" 2>&1 || true
+  else
+pihole_reload_dns >>"$LOG" 2>&1 || true
+  fi
+}
+
 # git pull som pi (root saknar ofta ssh-nycklar)
 if [[ -d "$REPO_DIR/.git" ]]; then
   say "git pull (as pi, best effort)"
@@ -268,7 +277,7 @@ say "Rebuild gravity..."
 pihole -g >>"$LOG" 2>&1 || true
 
 say "Restart DNS..."
-pihole restartdns >>"$LOG" 2>&1 || true
+pihole_reload_dns >>"$LOG" 2>&1 || true
 
 say "OK: policy applied."
 echo "OK"
