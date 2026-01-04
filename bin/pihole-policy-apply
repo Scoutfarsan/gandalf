@@ -21,8 +21,8 @@ need grep
 need systemctl
 
 sql(){
-  # Busy timeout utan att skriva "8000" i stdout (annars förstörs variabler)
-  sqlite3 -cmd "PRAGMA busy_timeout=8000;" "$DB" "$1"
+  # Tyst busy-timeout (viktigt: får INTE skriva "8000" i stdout, annars förstörs variabler)
+  sqlite3 -cmd ".timeout 8000" "$DB" "$1"
 }
 
 # git pull som pi (root saknar ofta ssh-nycklar)
