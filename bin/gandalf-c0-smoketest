@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOST="$(hostname)"
+NOW="$(date '+%F %T')"
+DNS="${DNS:-127.0.0.1}"
+
+ok(){ echo "OK: $*"; }
+warn(){ echo "WARN: $*"; }
+fail(){ echo "FAIL: $*"; }
+
+# Basic checks
+FTL="unknown"
+if systemctl is-active --quiet pihole-FTL 2>/dev/null; then
+  FTL="active"
+else
+  FTL="not-active"
+fi
+
+resolve() {
+  local name="$1"
+  dig @"$DNS" "$name" +time=2 +tries=1 +short 2>/dev/null | head -n1
+}
+
+G1="$(resolve google.com || true)"
+C1="$(resolve cloudflare.com || true)"
+
+STATUS="✅"
+MSG="C.0 smoketest OK"
+if [[ -z "$G1" || -z "$C1" || "$FTL" != "active" ]]; then
+  STATUS="⚠️"
+  MSG="C.0 smoketest WARN"
+fi
+
+BODY="$STATUS $HOST – $MSG
+🕒 $NOW
+DNS: $DNS
+FTL: $FTL
+google.com: ${G1:-"-"}
+cloudflare.com: ${C1:-"-"}
+"
+
+echo "$BODY"
+
+# Notify (supports both ntfy-send and send-ntfy)
+if command -v ntfy-send >/dev/null 2>&1; then
+  ntfy-send daily "$BODY" --title "[$HOST] C.0 DNS smoketest" || true
+elif command -v send-ntfy >/dev/null 2>&1; then
+  send-ntfy "C.0 DNS smoketest" "$BODY" || true
+fi

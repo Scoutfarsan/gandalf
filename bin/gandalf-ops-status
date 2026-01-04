@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+say(){ echo -e "$*"; }
+hr(){ echo "------------------------------------------------------------"; }
+
+HOST="$(hostname)"
+NOW="$(date '+%F %T')"
+
+say "🧭 Gandalf Ops Status"
+say "Host: $HOST"
+say "Time: $NOW"
+hr
+
+say "🕒 Uptime:"
+uptime -p || true
+hr
+
+say "🌐 IP (eth0/wlan0/wg0):"
+for dev in eth0 wlan0 wg0; do
+  ip -4 -o addr show dev "$dev" 2>/dev/null | awk -v d="$dev" '{print " - " d ": " $4}' || true
+done
+hr
+
+say "🧩 Default route:"
+ip route | awk '/^default/ {print " - default via " $3 " dev " $5; exit}' || true
+hr
+
+say "🕳️ Pi-hole:"
+if command -v pihole >/dev/null 2>&1; then
+  pihole status 2>/dev/null || true
+else
+  say " - pihole: missing"
+fi
+hr
+
+say "⏱️ Timers (apt/pihole):"
+systemctl list-timers --all 2>/dev/null | egrep 'apt-|pihole-' || true
+hr
+
+say "🚨 Failed units:"
+systemctl --failed 2>/dev/null || true
+hr
+
+say "✅ Done"
