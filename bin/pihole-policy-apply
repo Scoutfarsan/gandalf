@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_DIR="${REPO_DIR:-/home/pi/gandalf-ops}"
+RULES_DIR="${RULES_DIR:-$REPO_DIR/pihole-rules}"
+DB="${DB:-/etc/pihole/gravity.db}"
+LOG="/var/log/pihole-policy-apply.log"
+
+ts(){ date '+%F %T'; }
+say(){ echo "$(ts) [pihole-policy] $*" | tee -a "$LOG" >/dev/null; }
+
+need(){ command -v "$1" >/dev/null 2>&1 || { echo "Missing: $1" >&2; exit 2; }; }
+need sqlite3
+need pihole
+
+# Pull repo updates (non-fatal if already up-to-date)
+if [[ -d "$REPO_DIR/.git" ]]; then
+  say "git pull (best effort)"
+  git -C "$REPO_DIR" pull --ff-only >>"$LOG" 2>&1 || true
+fi
+
+if [[ ! -f "$DB" ]]; then
+  say "ERROR: gravity.db not found at $DB"
+  exit 2
+fi
+
+# Helpers
+sql(){ sqlite3 "$DB" "$1"; }
+ensure_group(){
+  local g="$1"
+  local id
+  id="$(sql "SELECT id FROM 'group' WHERE name='$g' LIMIT 1;")"
+  if [[ -z "$id" ]]; then
+    say "Create group: $g"
+    sql "INSERT INTO 'group'(enabled,name,description) VALUES(1,'$g','managed by policy-as-code');"
+  fi
+}
+group_id(){ sql "SELECT id FROM 'group' WHERE name='$1' LIMIT 1;"; }
+
+ensure_domainlist(){
+  # type: 1 exact deny, 2 exact allow, 3 regex deny, 4 regex allow
+  local type="$1" domain="$2" comment="$3"
+  local id
+  id="$(sql "SELECT id FROM domainlist WHERE type=$type AND domain='$domain' LIMIT 1;")"
+  if [[ -z "$id" ]]; then
+    say "Add domainlist: type=$type $domain"
+    sql "INSERT INTO domainlist(type,domain,enabled,comment) VALUES($type,'$domain',1,'$comment');"
+  fi
+  sql "SELECT id FROM domainlist WHERE type=$type AND domain='$domain' LIMIT 1;"
+}
+bind_domain_to_group(){
+  local domain_id="$1" group_id="$2"
+  local exists
+  exists="$(sql "SELECT 1 FROM domainlist_by_group WHERE domainlist_id=$domain_id AND group_id=$group_id LIMIT 1;")"
+  if [[ -z "$exists" ]]; then
+    sql "INSERT INTO domainlist_by_group(domainlist_id,group_id) VALUES($domain_id,$group_id);"
+  fi
+}
+
+ensure_adlist(){
+  local url="$1"
+  local id
+  id="$(sql "SELECT id FROM adlist WHERE address='$url' LIMIT 1;")"
+  if [[ -z "$id" ]]; then
+    say "Add adlist: $url"
+    sql "INSERT INTO adlist(address,enabled,comment) VALUES('$url',1,'managed by policy-as-code');"
+  fi
+}
+bind_adlist_all_groups(){
+  local url="$1"
+  local ad_id gid exists
+  ad_id="$(sql "SELECT id FROM adlist WHERE address='$url' LIMIT 1;")"
+  [[ -z "$ad_id" ]] && return 0
+  while IFS= read -r gid; do
+    [[ -z "$gid" ]] && continue
+    exists="$(sql "SELECT 1 FROM adlist_by_group WHERE adlist_id=$ad_id AND group_id=$gid LIMIT 1;")"
+    if [[ -z "$exists" ]]; then
+      sql "INSERT INTO adlist_by_group(adlist_id,group_id) VALUES($ad_id,$gid);"
+    fi
+  done < <(sql "SELECT id FROM 'group';")
+}
+
+ensure_client(){
+  local client="$1" comment="$2"
+  local id
+  id="$(sql "SELECT id FROM client WHERE ip='$client' OR name='$client' LIMIT 1;")"
+  if [[ -z "$id" ]]; then
+    # Treat as IP if matches digits+dot, else name
+    if [[ "$client" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      sql "INSERT INTO client(ip,comment) VALUES('$client','$comment');"
+    else
+      sql "INSERT INTO client(name,comment) VALUES('$client','$comment');"
+    fi
+  fi
+  sql "SELECT id FROM client WHERE ip='$client' OR name='$client' LIMIT 1;"
+}
+bind_client_group(){
+  local client_id="$1" group_id="$2"
+  local exists
+  exists="$(sql "SELECT 1 FROM client_by_group WHERE client_id=$client_id AND group_id=$group_id LIMIT 1;")"
+  if [[ -z "$exists" ]]; then
+    sql "INSERT INTO client_by_group(client_id,group_id) VALUES($client_id,$group_id);"
+  fi
+}
+
+read_lines(){
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  grep -v '^[[:space:]]*#' "$file" | sed '/^[[:space:]]*$/d'
+}
+
+say "Apply groups..."
+while IFS= read -r g; do
+  [[ -z "$g" ]] && continue
+  ensure_group "$g"
+done < <(read_lines "$RULES_DIR/groups.txt")
+
+say "Apply clients..."
+if [[ -f "$RULES_DIR/clients.csv" ]]; then
+  while IFS= read -r line; do
+    [[ -z "$line" || "$line" =~ ^# ]] && continue
+    IFS=',' read -r client group comment <<<"$line"
+    client="${client//[[:space:]]/}"
+    group="${group//[[:space:]]/}"
+    comment="${comment:-managed}"
+    [[ -z "$client" || -z "$group" ]] && continue
+    ensure_group "$group"
+    cid="$(ensure_client "$client" "$comment")"
+    gid="$(group_id "$group")"
+    bind_client_group "$cid" "$gid"
+  done < "$RULES_DIR/clients.csv"
+fi
+
+say "Apply adlists..."
+while IFS= read -r url; do
+  [[ -z "$url" ]] && continue
+  ensure_adlist "$url"
+  # bind to all groups to keep it simple and deterministic
+  bind_adlist_all_groups "$url"
+done < <(read_lines "$RULES_DIR/adlists.txt")
+
+# Convenience: get group IDs
+ALL_GIDS=()
+while IFS= read -r gid; do ALL_GIDS+=("$gid"); done < <(sql "SELECT id FROM 'group' WHERE enabled=1;")
+ALEX_GID="$(group_id "Alexander" || true)"
+
+say "Apply ALWAYS-ALLOW regex (type=4) to ALL groups..."
+while IFS= read -r rx; do
+  [[ -z "$rx" ]] && continue
+  did="$(ensure_domainlist 4 "$rx" "always-allow")"
+  for gid in "${ALL_GIDS[@]}"; do bind_domain_to_group "$did" "$gid"; done
+done < <(read_lines "$RULES_DIR/allow_regex_always.txt")
+
+say "Apply GLOBAL BLOCK regex (type=3) to ALL groups..."
+while IFS= read -r rx; do
+  [[ -z "$rx" ]] && continue
+  did="$(ensure_domainlist 3 "$rx" "global-block")"
+  for gid in "${ALL_GIDS[@]}"; do bind_domain_to_group "$did" "$gid"; done
+done < <(read_lines "$RULES_DIR/block_regex_global.txt")
+
+say "Apply EXCEPT-ALEXANDER BLOCK regex (type=3) to all groups except Alexander..."
+while IFS= read -r rx; do
+  [[ -z "$rx" ]] && continue
+  did="$(ensure_domainlist 3 "$rx" "block-except-alexander")"
+  for gid in "${ALL_GIDS[@]}"; do
+    if [[ -n "${ALEX_GID:-}" && "$gid" == "$ALEX_GID" ]]; then
+      continue
+    fi
+    bind_domain_to_group "$did" "$gid"
+  done
+done < <(read_lines "$RULES_DIR/block_regex_except_alexander.txt")
+
+# Optional apps allowlist (type=4) – disabled by default unless APPS_ALLOW=1
+APPS_ALLOW="${APPS_ALLOW:-0}"
+if (( APPS_ALLOW == 1 )); then
+  say "Apply APPS allow regex to ALL groups (APPS_ALLOW=1)..."
+  while IFS= read -r rx; do
+    [[ -z "$rx" ]] && continue
+    did="$(ensure_domainlist 4 "$rx" "apps-allow")"
+    for gid in "${ALL_GIDS[@]}"; do bind_domain_to_group "$did" "$gid"; done
+  done < <(read_lines "$RULES_DIR/allow_regex_apps.txt")
+else
+  say "APPS_ALLOW=0 (skip allow_regex_apps.txt)"
+fi
+
+# Ensure blockall regex exists and store its id for schedulers
+BLOCKALL_RX="$(read_lines "$RULES_DIR/blockall_regex.txt" | head -n1 || true)"
+if [[ -n "${BLOCKALL_RX:-}" ]]; then
+  BLOCKALL_ID="$(ensure_domainlist 3 "$BLOCKALL_RX" "blockall-scheduled")"
+  mkdir -p /var/lib/gandalf
+  echo "$BLOCKALL_ID" > /var/lib/gandalf/pihole_blockall_domainlist_id
+  say "Blockall rule id=$BLOCKALL_ID stored in /var/lib/gandalf/pihole_blockall_domainlist_id"
+fi
+
+say "Rebuild gravity..."
+pihole -g >>"$LOG" 2>&1 || true
+
+say "Restart DNS..."
+pihole restartdns >>"$LOG" 2>&1 || true
+
+say "OK: policy applied."
+echo "OK"

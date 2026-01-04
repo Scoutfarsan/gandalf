@@ -1,0 +1,45 @@
+# YouTube
+(^|\.)youtube\.com$
+(^|\.)googlevideo\.com$
+(^|\.)ytimg\.com$
+
+# Spotify
+(^|\.)spotify\.com$
+(^|\.)scdn\.co$
+
+# Netflix
+(^|\.)netflix\.com$
+(^|\.)nflxvideo\.net$
+(^|\.)nflximg\.net$
+(^|\.)nflxso\.net$
+
+# SVT Play / SVT
+(^|\.)svt\.se$
+
+# TV4 Play
+(^|\.)tv4\.se$
+(^|\.)tv4play\.se$
+
+# ViaPlay
+(^|\.)viaplay\.com$
+(^|\.)viaplay\.se$
+
+# HBO / Max (varierar – komplettera vid behov via querylog)
+(^|\.)hbomax\.com$
+(^|\.)max\.com$
+
+# Discord / Teamspeak
+(^|\.)discord\.com$
+(^|\.)discordapp\.com$
+(^|\.)discordgg\.com$
+(^|\.)teamspeak\.com$
+
+# Steam / Epic / EA / Rockstar / Battle.net
+(^|\.)steampowered\.com$
+(^|\.)steamcontent\.com$
+(^|\.)steamstatic\.com$
+(^|\.)epicgames\.com$
+(^|\.)ea\.com$
+(^|\.)rockstargames\.com$
+(^|\.)battle\.net$
+(^|\.)blizzard\.com$

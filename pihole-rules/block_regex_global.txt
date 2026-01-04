@@ -1,0 +1,12 @@
+# TikTok
+(^|\.)tiktok\.com$
+(^|\.)tiktokcdn\.com$
+(^|\.)tiktokv\.com$
+
+# Temu
+(^|\.)temu\.com$
+
+# AliExpress
+(^|\.)aliexpress\.com$
+(^|\.)aliexpress\.ru$
+(^|\.)aliexpress\.us$

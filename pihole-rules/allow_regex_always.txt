@@ -1,0 +1,22 @@
+# BankID
+(^|\.)bankid\.com$
+(^|\.)app\.bankid\.com$
+
+# Krisinformation (MSB)
+(^|\.)krisinformation\.se$
+
+# Handelsbanken
+(^|\.)handelsbanken\.se$
+(^|\.)handelsbanken\.com$
+(^|\.)handelsbanken\.net$
+
+# SOS Alarm
+(^|\.)sosalarm\.se$
+
+# Verisure
+(^|\.)verisure\.com$
+(^|\.)verisure\.se$
+(^|\.)myverisure\.com$
+
+# Västtrafik
+(^|\.)vasttrafik\.se$

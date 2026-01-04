@@ -1,0 +1,12 @@
+[Unit]
+Description=Pi-hole policy apply (repo -> Pi-hole)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/pihole-policy-apply
+TimeoutStartSec=1800
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

@@ -1,0 +1,6 @@
+[Unit]
+Description=Enable blockall for kids/guest groups
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/pihole-blockall-toggle on Jonathan Mathilda Gast

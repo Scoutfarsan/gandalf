@@ -1,3 +1,5 @@
 # En URL per rad. Kommentarer med #.
-# Exempel:
 https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
+https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-porn/hosts
+https://blocklistproject.github.io/Lists/alt-version/abuse-nl.txt
+https://blocklistproject.github.io/Lists/alt-version/porn-nl.txt
