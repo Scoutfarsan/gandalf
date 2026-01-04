@@ -12,8 +12,13 @@ say(){ echo "$(ts) [pihole-policy] $*" | tee -a "$LOG" >/dev/null; }
 need(){ command -v "$1" >/dev/null 2>&1 || { echo "Missing: $1" >&2; exit 2; }; }
 need sqlite3
 need pihole
+need awk
+need sed
+need grep
 
-# Pull repo updates (non-fatal if already up-to-date)
+sql(){ sqlite3 "$DB" "$1"; }
+
+# Pull repo updates (best effort)
 if [[ -d "$REPO_DIR/.git" ]]; then
   say "git pull (best effort)"
   git -C "$REPO_DIR" pull --ff-only >>"$LOG" 2>&1 || true
@@ -24,8 +29,21 @@ if [[ ! -f "$DB" ]]; then
   exit 2
 fi
 
-# Helpers
-sql(){ sqlite3 "$DB" "$1"; }
+# Detect client table columns (Pi-hole v6 schema differs)
+HAS_CLIENT_NAME=0
+HAS_CLIENT_IP=0
+CLIENT_HW_COL=""  # hwaddr/mac/...
+
+while IFS='|' read -r _ col _; do
+  case "$col" in
+    name) HAS_CLIENT_NAME=1 ;;
+    ip)   HAS_CLIENT_IP=1 ;;
+    hwaddr|mac|hardware_address) CLIENT_HW_COL="$col" ;;
+  esac
+done < <(sql "PRAGMA table_info(client);")
+
+say "client schema: ip=$HAS_CLIENT_IP name=$HAS_CLIENT_NAME hw_col=${CLIENT_HW_COL:-none}"
+
 ensure_group(){
   local g="$1"
   local id
@@ -48,6 +66,7 @@ ensure_domainlist(){
   fi
   sql "SELECT id FROM domainlist WHERE type=$type AND domain='$domain' LIMIT 1;"
 }
+
 bind_domain_to_group(){
   local domain_id="$1" group_id="$2"
   local exists
@@ -66,6 +85,7 @@ ensure_adlist(){
     sql "INSERT INTO adlist(address,enabled,comment) VALUES('$url',1,'managed by policy-as-code');"
   fi
 }
+
 bind_adlist_all_groups(){
   local url="$1"
   local ad_id gid exists
@@ -81,21 +101,50 @@ bind_adlist_all_groups(){
 }
 
 ensure_client(){
+  # supports IP or MAC. Hostname is treated as comment only (unless name column exists)
   local client="$1" comment="$2"
-  local id
-  id="$(sql "SELECT id FROM client WHERE ip='$client' OR name='$client' LIMIT 1;")"
-  if [[ -z "$id" ]]; then
-    # Treat as IP if matches digits+dot, else name
-    if [[ "$client" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  local id=""
+
+  # IP?
+  if [[ "$client" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && (( HAS_CLIENT_IP == 1 )); then
+    id="$(sql "SELECT id FROM client WHERE ip='$client' LIMIT 1;")"
+    if [[ -z "$id" ]]; then
       sql "INSERT INTO client(ip,comment) VALUES('$client','$comment');"
-    else
-      sql "INSERT INTO client(name,comment) VALUES('$client','$comment');"
+      id="$(sql "SELECT id FROM client WHERE ip='$client' LIMIT 1;")"
     fi
+    echo "$id"
+    return 0
   fi
-  sql "SELECT id FROM client WHERE ip='$client' OR name='$client' LIMIT 1;"
+
+  # MAC?
+  if [[ "$client" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]] && [[ -n "${CLIENT_HW_COL:-}" ]]; then
+    id="$(sql "SELECT id FROM client WHERE $CLIENT_HW_COL='$client' LIMIT 1;")"
+    if [[ -z "$id" ]]; then
+      sql "INSERT INTO client($CLIENT_HW_COL,comment) VALUES('$client','$comment');"
+      id="$(sql "SELECT id FROM client WHERE $CLIENT_HW_COL='$client' LIMIT 1;")"
+    fi
+    echo "$id"
+    return 0
+  fi
+
+  # Name column exists?
+  if (( HAS_CLIENT_NAME == 1 )); then
+    id="$(sql "SELECT id FROM client WHERE name='$client' LIMIT 1;")"
+    if [[ -z "$id" ]]; then
+      sql "INSERT INTO client(name,comment) VALUES('$client','$comment');"
+      id="$(sql "SELECT id FROM client WHERE name='$client' LIMIT 1;")"
+    fi
+    echo "$id"
+    return 0
+  fi
+
+  say "WARN: client '$client' could not be stored (no suitable column). Use IP or MAC. comment='$comment'"
+  echo ""
 }
+
 bind_client_group(){
   local client_id="$1" group_id="$2"
+  [[ -z "$client_id" || -z "$group_id" ]] && return 0
   local exists
   exists="$(sql "SELECT 1 FROM client_by_group WHERE client_id=$client_id AND group_id=$group_id LIMIT 1;")"
   if [[ -z "$exists" ]]; then
@@ -120,8 +169,8 @@ if [[ -f "$RULES_DIR/clients.csv" ]]; then
   while IFS= read -r line; do
     [[ -z "$line" || "$line" =~ ^# ]] && continue
     IFS=',' read -r client group comment <<<"$line"
-    client="${client//[[:space:]]/}"
-    group="${group//[[:space:]]/}"
+    client="$(echo "${client:-}" | sed 's/[[:space:]]//g')"
+    group="$(echo "${group:-}" | sed 's/[[:space:]]//g')"
     comment="${comment:-managed}"
     [[ -z "$client" || -z "$group" ]] && continue
     ensure_group "$group"
@@ -135,11 +184,9 @@ say "Apply adlists..."
 while IFS= read -r url; do
   [[ -z "$url" ]] && continue
   ensure_adlist "$url"
-  # bind to all groups to keep it simple and deterministic
   bind_adlist_all_groups "$url"
 done < <(read_lines "$RULES_DIR/adlists.txt")
 
-# Convenience: get group IDs
 ALL_GIDS=()
 while IFS= read -r gid; do ALL_GIDS+=("$gid"); done < <(sql "SELECT id FROM 'group' WHERE enabled=1;")
 ALEX_GID="$(group_id "Alexander" || true)"
@@ -170,7 +217,6 @@ while IFS= read -r rx; do
   done
 done < <(read_lines "$RULES_DIR/block_regex_except_alexander.txt")
 
-# Optional apps allowlist (type=4) – disabled by default unless APPS_ALLOW=1
 APPS_ALLOW="${APPS_ALLOW:-0}"
 if (( APPS_ALLOW == 1 )); then
   say "Apply APPS allow regex to ALL groups (APPS_ALLOW=1)..."
@@ -183,7 +229,6 @@ else
   say "APPS_ALLOW=0 (skip allow_regex_apps.txt)"
 fi
 
-# Ensure blockall regex exists and store its id for schedulers
 BLOCKALL_RX="$(read_lines "$RULES_DIR/blockall_regex.txt" | head -n1 || true)"
 if [[ -n "${BLOCKALL_RX:-}" ]]; then
   BLOCKALL_ID="$(ensure_domainlist 3 "$BLOCKALL_RX" "blockall-scheduled")"
