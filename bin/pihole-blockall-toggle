@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 
 pihole_reload_dns(){
   # Pi-hole CLI skiljer mellan versioner: vissa har restartdns, andra har reloaddns.
