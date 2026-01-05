@@ -1,51 +1,67 @@
 #!/usr/bin/env bash
-
-pihole_reload_dns(){
-  # Pi-hole CLI skiljer mellan versioner: vissa har restartdns, andra har reloaddns.
-  if pihole help 2>/dev/null | grep -qE '(^|[[:space:]])restartdns([[:space:]]|$)'; then
-pihole_reload_dns >>"$LOG" 2>&1 || true
-  else
-pihole_reload_dns >>"$LOG" 2>&1 || true
-  fi
-}
-#!/usr/bin/env bash
+# Robust toggle utan pipelines (undviker "pipe error: Too many open files")
 set -euo pipefail
+ulimit -n 8192 >/dev/null 2>&1 || true
 
-ACTION="${1:-}"
-shift || true
+ACTION="${1:-}"; shift || true
 
 DB="/etc/pihole/gravity.db"
 ID_FILE="/var/lib/gandalf/pihole_blockall_domainlist_id"
 LOG="/var/log/pihole-blockall-toggle.log"
+STOP_FTL="${STOP_FTL:-1}"
 
 ts(){ date '+%F %T'; }
-say(){ echo "$(ts) [blockall] $*" | tee -a "$LOG" >/dev/null; }
+say(){ local m; m="$(ts) [blockall] $*"; echo "$m" >>"$LOG"; echo "$m"; }
+
+need(){ command -v "$1" >/dev/null 2>&1 || { say "ERROR: Missing $1"; exit 2; }; }
+need sqlite3
+need systemctl
+need pihole
+
+sql(){
+  sqlite3 -cmd ".timeout 8000" "$DB" "$1"
+}
+
+gid(){
+  sql "SELECT id FROM 'group' WHERE name='$1' LIMIT 1;"
+}
 
 if [[ ! -f "$ID_FILE" ]]; then
-  echo "Missing $ID_FILE (run pihole-policy-apply once)" >&2
+  say "ERROR: Missing $ID_FILE (run pihole-policy-apply once)"
   exit 2
 fi
 BLOCKALL_ID="$(cat "$ID_FILE")"
 
-sql(){ sqlite3 "$DB" "$1"; }
-gid(){ sql "SELECT id FROM 'group' WHERE name='$1' LIMIT 1;"; }
-
 if [[ "$ACTION" != "on" && "$ACTION" != "off" ]]; then
-  echo "Usage: $0 on|off Group1 Group2 ..." >&2
+  say "Usage: $0 on|off Group1 Group2 ..."
   exit 2
 fi
 
-ENABLE=1
-[[ "$ACTION" == "off" ]] && ENABLE=0
+FTL_WAS_ACTIVE=0
+cleanup(){
+  if (( STOP_FTL == 1 )) && (( FTL_WAS_ACTIVE == 1 )); then
+    say "Starting pihole-FTL (restore)"
+    systemctl start pihole-FTL >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
+if (( STOP_FTL == 1 )); then
+  if systemctl is-active --quiet pihole-FTL 2>/dev/null; then
+    FTL_WAS_ACTIVE=1
+    say "Stopping pihole-FTL to avoid sqlite lock"
+    systemctl stop pihole-FTL >/dev/null 2>&1 || true
+  fi
+fi
 
 for g in "$@"; do
   GID="$(gid "$g")"
-  [[ -z "$GID" ]] && { say "SKIP: group not found: $g"; continue; }
-  # ensure mapping exists
-  sql "INSERT OR IGNORE INTO domainlist_by_group(domainlist_id,group_id) VALUES($BLOCKALL_ID,$GID);"
-  # toggle enabled on domainlist (global) – but we want per-group, so we keep domain enabled=1
-  # and implement per-group disable by removing mapping when OFF
-  if (( ENABLE == 1 )); then
+  if [[ -z "${GID:-}" ]]; then
+    say "SKIP: group not found: $g"
+    continue
+  fi
+
+  if [[ "$ACTION" == "on" ]]; then
     say "ON: $g"
     sql "INSERT OR IGNORE INTO domainlist_by_group(domainlist_id,group_id) VALUES($BLOCKALL_ID,$GID);"
   else
@@ -54,5 +70,12 @@ for g in "$@"; do
   fi
 done
 
-pihole_reload_dns >>"$LOG" 2>&1 || true
+# Starta FTL innan reloaddns (bra hygiene)
+if (( STOP_FTL == 1 )) && (( FTL_WAS_ACTIVE == 1 )); then
+  say "Starting pihole-FTL before reloaddns"
+  systemctl start pihole-FTL >/dev/null 2>&1 || true
+  FTL_WAS_ACTIVE=0
+fi
+
+pihole reloaddns >/dev/null 2>&1 || true
 say "DONE"
