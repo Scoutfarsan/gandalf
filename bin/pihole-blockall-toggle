@@ -1,9 +1,48 @@
 #!/usr/bin/env bash
 # Robust toggle utan pipelines (undviker "pipe error: Too many open files")
 set -euo pipefail
+
+should_skip_today(){
+  # Return 0 = SKIP (ingen blockall), 1 = OK att köra
+  local mmdd dow dd mm
+  mmdd="$(date +%m-%d)"
+  dow="$(date +%u)"   # 1=Mon .. 5=Fri .. 7=Sun
+  dd="$(date +%d)"
+  mm="$(date +%m)"
+
+  # Fasta undantag
+  case "$mmdd" in
+    01-01|12-23|12-24|12-31) return 0 ;;
+  esac
+
+  # Midsommarafton: fredag mellan 19–25 juni
+  if [[ "$mm" == "06" && "$dow" == "5" ]]; then
+    if (( 10#$dd >= 19 && 10#$dd <= 25 )); then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+
+if should_skip_today; then
+  say "SKIP: holiday exception (no blockall today)"
+  exit 0
+fi
+
 ulimit -n 8192 >/dev/null 2>&1 || true
 
 ACTION="${1:-}"; shift || true
+
+if [[ "" == "check" ]]; then
+  if should_skip_today; then
+    echo "SKIP"
+  else
+    echo "RUN"
+  fi
+  exit 0
+fi
 
 DB="/etc/pihole/gravity.db"
 ID_FILE="/var/lib/gandalf/pihole_blockall_domainlist_id"
